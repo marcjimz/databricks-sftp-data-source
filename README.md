@@ -42,78 +42,69 @@ This repository contains:
 
 Follow these steps in order to set up and run the complete SFTP data pipeline:
 
-### Step 1: Configure Azure Settings (Local Machine)
+### Step 1: Setup Azure Infrastructure (Local Machine)
 
-Before running any notebooks, configure your Azure environment locally:
+Run the Azure setup script on your local machine:
 
 ```bash
-# Copy the configuration template
-cp config/azure_config.template.sh config/azure_config.sh
-
-# Edit azure_config.sh with your Azure subscription and resource details
-# Update: SUBSCRIPTION_ID, RESOURCE_GROUP, LOCATION, etc.
-
-# Load the configuration
-source config/azure_config.sh
+cd scripts
+./setup_azure_infrastructure.sh
 ```
 
-### Step 2: Run Prerequisites Notebook
-
-**Notebook**: `notebooks/00_prerequisites.ipynb`
-
-This step sets up your Azure infrastructure. Run the Azure CLI commands in this notebook to:
-- Generate SSH key pair (`~/.ssh/sftp_key`)
-- Create two Azure Storage accounts with SFTP enabled (source and target)
-- Configure SFTP users with SSH key authentication
-- Upload sample CSV files (customers.csv, orders.csv) to source SFTP
+**What this script does:**
+- Generates SSH key pair (`~/.ssh/sftp_key`)
+- Creates Azure resource group
+- Creates two Azure Storage accounts with SFTP enabled (source and target)
+- Creates containers for data
+- Configures SFTP users with SSH key authentication
+- Uploads sample CSV files (customers.csv, orders.csv) to source SFTP
+- Displays connection details
 
 **What you'll have after this step:**
 - Two Azure Storage accounts with SFTP enabled
 - SSH keys for authentication
 - Sample data files in source SFTP
+- SFTP connection details
 
-### Step 3: Install Package and Configure Secrets
+### Step 2: Configure Databricks Secrets (Local Machine)
+
+Run the Databricks secrets setup script on your local machine:
+
+```bash
+cd scripts
+./setup_databricks_secrets.sh
+```
+
+**Prerequisites:**
+- Databricks CLI installed and configured (`databricks configure --token`)
+- Azure CLI configured
+
+**What this script does:**
+- Creates Databricks secret scope (`sftp-credentials`)
+- Stores SFTP connection details in Databricks secrets
+- Uploads SSH private key to DBFS (`dbfs:/FileStore/ssh-keys/sftp_key`)
+
+**What you'll have after this step:**
+- Credentials securely stored in Databricks secrets
+- SSH keys available in DBFS
+- Ready to run Databricks notebooks
+
+### Step 3: Install Package and Verify Setup (Databricks)
 
 **Notebook**: `notebooks/01_infrastructure_setup.ipynb`
 
 Run this notebook in your Databricks workspace to:
-
-1. **Install the SFTP package:**
-   ```python
-   # Install dependencies from requirements.txt
-   %pip install -r /Workspace/Repos/<your-repo>/databricks-sftp-data-source/requirements.txt
-
-   # Install the custom SFTP package
-   %pip install -e /Workspace/Repos/<your-repo>/databricks-sftp-data-source
-   ```
-
-2. **Create Databricks secrets** (run these commands in your terminal or notebook):
-   ```bash
-   databricks secrets create-scope --scope sftp-credentials
-
-   databricks secrets put --scope sftp-credentials --key source-host
-   databricks secrets put --scope sftp-credentials --key source-username
-   databricks secrets put --scope sftp-credentials --key source-private-key
-
-   databricks secrets put --scope sftp-credentials --key target-host
-   databricks secrets put --scope sftp-credentials --key target-username
-   databricks secrets put --scope sftp-credentials --key target-private-key
-   ```
-
-3. **Upload SSH private key to DBFS:**
-   ```bash
-   databricks fs cp ~/.ssh/sftp_key dbfs:/FileStore/ssh-keys/sftp_key
-   ```
-
-4. **Test SFTP connections** using the notebook validation cells
+- Install the SFTP package from requirements.txt
+- Verify secrets and SSH keys are configured correctly
+- Test SFTP connections to source and target
+- Save configuration to Unity Catalog
 
 **What you'll have after this step:**
 - SFTP package installed in Databricks
-- Credentials securely stored in Databricks secrets
-- SSH keys available in DBFS
 - Verified SFTP connectivity
+- Configuration saved to Unity Catalog
 
-### Step 4: Set Up Unity Catalog Connections
+### Step 4: Set Up Unity Catalog Connections (Databricks)
 
 **Notebook**: `notebooks/02_uc_connection_setup.ipynb`
 
@@ -198,11 +189,14 @@ databricks-sftp-data-source/
 │   └── ingest/               # Custom SFTP data source package
 │       ├── __init__.py
 │       └── SFTPWriter.py     # Paramiko-based SFTP writer
-├── notebooks/                 # Databricks notebooks
-│   ├── 00_prerequisites.ipynb
-│   ├── 01_infrastructure_setup.ipynb
-│   ├── 02_uc_connection_setup.ipynb
-│   └── 03_dlt_pipeline.ipynb
+├── scripts/                   # Local machine setup scripts
+│   ├── setup_azure_infrastructure.sh    # Azure resources setup
+│   └── setup_databricks_secrets.sh      # Databricks secrets configuration
+├── notebooks/                 # Databricks notebooks (run in Databricks)
+│   ├── 00_prerequisites.ipynb           # Setup instructions
+│   ├── 01_infrastructure_setup.ipynb    # Package install & verification
+│   ├── 02_uc_connection_setup.ipynb     # Unity Catalog setup
+│   └── 03_dlt_pipeline.ipynb            # DLT pipeline
 ├── data/                      # Sample CSV files
 │   ├── customers.csv
 │   └── orders.csv
@@ -210,8 +204,8 @@ databricks-sftp-data-source/
 │   ├── sftp_config.template.json
 │   ├── azure_config.template.sh
 │   └── dlt_pipeline_config.json
-├── requirements.txt
-├── setup.py
+├── requirements.txt           # Python dependencies (pinned versions)
+├── setup.py                   # Package setup
 └── README.md
 ```
 
@@ -330,20 +324,6 @@ Factory class for creating SFTP writers.
 **Methods:**
 - `create_writer(config)` - Create SFTPWriter from configuration
 - `write(df, remote_path, config, **kwargs)` - Convenience method to write DataFrame
-
-## Testing
-
-Run unit tests:
-
-```bash
-pytest tests/
-```
-
-Run with coverage:
-
-```bash
-pytest --cov=ingest tests/
-```
 
 ## Monitoring
 
