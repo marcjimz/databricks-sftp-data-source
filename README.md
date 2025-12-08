@@ -80,7 +80,10 @@ Run this notebook in your Databricks workspace to:
 
 1. **Install the SFTP package:**
    ```python
-   %pip install paramiko
+   # Install dependencies from requirements.txt
+   %pip install -r /Workspace/Repos/<your-repo>/databricks-sftp-data-source/requirements.txt
+
+   # Install the custom SFTP package
    %pip install -e /Workspace/Repos/<your-repo>/databricks-sftp-data-source
    ```
 

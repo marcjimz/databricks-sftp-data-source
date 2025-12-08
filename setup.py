@@ -26,16 +26,16 @@ setup(
     ],
     python_requires=">=3.9",
     install_requires=[
-        "paramiko>=3.3.0",
-        "pandas>=2.0.0",
+        "paramiko==3.4.0",
+        "pandas==2.1.4",
     ],
     extras_require={
         "dev": [
-            "pytest>=7.4.0",
-            "pytest-cov>=4.1.0",
-            "black>=23.7.0",
-            "flake8>=6.1.0",
-            "mypy>=1.5.0",
+            "pytest==7.4.3",
+            "pytest-cov==4.1.0",
+            "black==23.12.1",
+            "flake8==6.1.0",
+            "mypy==1.7.1",
         ],
     },
 )
