@@ -4,6 +4,12 @@
 
 set -e  # Exit on error
 
+# Ensure proper SSL verification (disable insecure mode if set)
+if [ ! -z "$AZURE_CLI_DISABLE_CONNECTION_VERIFICATION" ]; then
+    echo "Warning: Disabling AZURE_CLI_DISABLE_CONNECTION_VERIFICATION for security"
+    unset AZURE_CLI_DISABLE_CONNECTION_VERIFICATION
+fi
+
 # Load configuration from .env file if it exists
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -f "$SCRIPT_DIR/../config/.env" ]; then
@@ -61,13 +67,14 @@ echo ""
 
 # Step 2: Get SFTP Connection Details
 echo "Step 2: Retrieving SFTP connection details from Azure..."
+# Use blob endpoint for SFTP, not dfs endpoint
 SOURCE_ENDPOINT=$(az storage account show \
   --name "$SOURCE_STORAGE" \
-  --query 'primaryEndpoints.dfs' -o tsv | sed 's|https://||' | sed 's|/||')
+  --query 'primaryEndpoints.blob' -o tsv | sed 's|https://||' | sed 's|/||')
 
 TARGET_ENDPOINT=$(az storage account show \
   --name "$TARGET_STORAGE" \
-  --query 'primaryEndpoints.dfs' -o tsv | sed 's|https://||' | sed 's|/||')
+  --query 'primaryEndpoints.blob' -o tsv | sed 's|https://||' | sed 's|/||')
 
 SOURCE_USERNAME="${SOURCE_STORAGE}.${SFTP_USER}"
 TARGET_USERNAME="${TARGET_STORAGE}.${SFTP_USER}"

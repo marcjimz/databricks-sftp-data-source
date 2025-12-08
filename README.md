@@ -290,9 +290,7 @@ databricks-sftp-data-source/
 │   └── orders.csv
 ├── config/                    # Configuration files
 │   ├── .env.example                     # Environment variables template
-│   ├── sftp_config.template.json
-│   ├── azure_config.template.sh
-│   └── dlt_pipeline_config.json
+│   └── dlt_pipeline_config.json         # DLT pipeline configuration
 ├── requirements.txt           # Python dependencies (pinned versions)
 ├── setup.py                   # Package setup
 └── README.md

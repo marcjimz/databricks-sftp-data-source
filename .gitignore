@@ -46,7 +46,6 @@ id_rsa*
 sftp_key*
 
 # Local config
-config/azure_config.sh
 config/.env
 .claude-flow/*
 .hive-mind*
