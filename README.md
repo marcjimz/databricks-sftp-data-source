@@ -78,16 +78,52 @@ az account show
 
 **Install and Configure Databricks CLI:**
 ```bash
-# Install Databricks CLI
-pip install databricks-cli
+# Install Databricks CLI (latest version)
+# macOS/Linux
+curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
-# Configure with your Databricks workspace
-databricks configure --token
-# Enter your Databricks workspace URL (e.g., https://adb-123456789.azuredatabricks.net)
-# Enter your personal access token
+# Or via Homebrew on macOS
+brew tap databricks/tap
+brew install databricks
 
-# Verify configuration
-databricks workspace ls /
+# Verify installation
+databricks --version
+```
+
+**Configure Authentication:**
+
+```bash
+# If you're already logged in to Azure CLI (az login),
+# the Databricks CLI can automatically use those credentials
+
+# Just configure the workspace host to DEFAULT
+databricks configure --host https://adb-123456789.azuredatabricks.net
+
+# The CLI will automatically use your Azure CLI credentials
+# Verify it works
+databricks workspace list / --profile DEFAULT
+```
+
+**Multiple Workspaces (Using Profiles):**
+```bash
+# Configure different workspaces with profiles
+databricks configure --host https://prod.azuredatabricks.net --profile production
+databricks configure --host https://dev.azuredatabricks.net --profile development
+
+# View all configured profiles
+cat ~/.databrickscfg
+
+# Use a specific profile
+databricks workspace ls / --profile production
+```
+
+**Important**: The `setup_databricks_secrets.sh` script will use your **DEFAULT** profile. If you have multiple workspaces:
+```bash
+# Use default profile
+./scripts/setup_databricks_secrets.sh
+
+# Use a specific profile
+DATABRICKS_CONFIG_PROFILE=production ./scripts/setup_databricks_secrets.sh
 ```
 
 **Configure Environment Variables:**
@@ -132,17 +168,17 @@ Run the Databricks secrets setup script from the repository root:
 ```
 
 **Prerequisites:**
-- Databricks CLI installed and configured (`databricks configure --token`)
+- Databricks CLI installed and configured (see Step 0 for authentication options - Azure CLI auth is recommended)
 - Azure CLI configured
 
 **What this script does:**
+- Displays the Databricks workspace you're connected to and prompts for confirmation
 - Creates Databricks secret scope (`sftp-credentials`)
 - Stores SFTP connection details in Databricks secrets
-- Uploads SSH private key to DBFS (`dbfs:/FileStore/ssh-keys/sftp_key`)
+- Stores SSH private key content in Databricks secrets
 
 **What you'll have after this step:**
-- Credentials securely stored in Databricks secrets
-- SSH keys available in DBFS
+- All credentials securely stored in Databricks secrets (host, username, SSH private key)
 - Ready to run Databricks notebooks
 
 ### Step 3: Install Package and Verify Setup (Databricks)
@@ -219,11 +255,22 @@ After the pipeline completes, verify the output:
 ```python
 # Check files written to target SFTP
 from ingest import SFTPWriter
+import tempfile
+import os
+
+# Get SSH private key from secrets and write to temporary file
+ssh_key_content = dbutils.secrets.get("sftp-credentials", "ssh-private-key")
+with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='_sftp_key') as tmp_key:
+    tmp_key.write(ssh_key_content)
+    tmp_key_path = tmp_key.name
+
+# Set proper permissions on the key file
+os.chmod(tmp_key_path, 0o600)
 
 config = {
     "host": dbutils.secrets.get("sftp-credentials", "target-host"),
     "username": dbutils.secrets.get("sftp-credentials", "target-username"),
-    "private_key_path": "/dbfs/FileStore/ssh-keys/sftp_key",
+    "private_key_path": tmp_key_path,
     "port": 22
 }
 
@@ -231,6 +278,9 @@ writer = SFTPWriter.create_writer(config)
 with writer.session():
     files = writer.list_files("/data/output")
     print(f"Files in target SFTP: {files}")
+
+# Clean up temporary key file
+os.remove(tmp_key_path)
 ```
 
 **Expected output files:**
@@ -249,21 +299,33 @@ Ensure you have:
 
 #### Step 2: Configure Databricks Secrets (Local Machine)
 
+First, configure Databricks CLI if not already done:
+```bash
+# Option 1: Azure CLI authentication (recommended, no PAT needed)
+databricks configure --host https://adb-XXXXX.azuredatabricks.net
+
+# Option 2: OAuth authentication (no PAT needed)
+databricks auth login --host https://adb-XXXXX.azuredatabricks.net
+
+# Option 3: Personal Access Token
+databricks configure --host https://adb-XXXXX.azuredatabricks.net --token
+```
+
 Manually create Databricks secrets:
 ```bash
 # Create secret scope
-databricks secrets create-scope --scope sftp-credentials
+databricks secrets create-scope sftp-credentials
 
 # Store source SFTP credentials
-echo "source.sftp.hostname.com" | databricks secrets put-secret --scope sftp-credentials --key source-host
-echo "sourceuser" | databricks secrets put-secret --scope sftp-credentials --key source-username
+echo "source.sftp.hostname.com" | databricks secrets put-secret sftp-credentials source-host
+echo "sourceuser" | databricks secrets put-secret sftp-credentials source-username
 
 # Store target SFTP credentials
-echo "target.sftp.hostname.com" | databricks secrets put-secret --scope sftp-credentials --key target-host
-echo "targetuser" | databricks secrets put-secret --scope sftp-credentials --key target-username
+echo "target.sftp.hostname.com" | databricks secrets put-secret sftp-credentials target-host
+echo "targetuser" | databricks secrets put-secret sftp-credentials target-username
 
-# Upload SSH private key to DBFS
-databricks fs cp ~/.ssh/your_sftp_key dbfs:/FileStore/ssh-keys/sftp_key
+# Store SSH private key content in secrets
+cat ~/.ssh/your_sftp_key | databricks secrets put-secret sftp-credentials ssh-private-key
 ```
 
 #### Step 3: Continue with Databricks Setup
@@ -302,12 +364,23 @@ databricks-sftp-data-source/
 
 ```python
 from ingest import SFTPDataSource, SFTPWriter
+import tempfile
+import os
+
+# Get SSH private key from secrets and write to temporary file
+ssh_key_content = dbutils.secrets.get("sftp-credentials", "ssh-private-key")
+with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='_sftp_key') as tmp_key:
+    tmp_key.write(ssh_key_content)
+    tmp_key_path = tmp_key.name
+
+# Set proper permissions
+os.chmod(tmp_key_path, 0o600)
 
 # Configuration
 config = {
-    "host": "myaccount.blob.core.windows.net",
-    "username": "myaccount.sftpuser",
-    "private_key_path": "/dbfs/FileStore/ssh-keys/sftp_key",
+    "host": dbutils.secrets.get("sftp-credentials", "target-host"),
+    "username": dbutils.secrets.get("sftp-credentials", "target-username"),
+    "private_key_path": tmp_key_path,
     "port": 22
 }
 
@@ -325,6 +398,9 @@ writer = SFTPDataSource.create_writer(config)
 with writer.session():
     writer.write_dataframe(df, "/data/output.csv", format="csv")
     files = writer.list_files(".")
+
+# Clean up temporary key file
+os.remove(tmp_key_path)
 ```
 
 ### DLT Pipeline
