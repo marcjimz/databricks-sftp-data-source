@@ -33,16 +33,74 @@ This repository contains:
 
 ## Prerequisites
 
+### For Demo Setup (Optional - Creates Azure SFTP Infrastructure):
 - Azure subscription with permissions to create storage accounts
+- Azure CLI installed locally ([installation guide](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli))
+- Databricks CLI installed locally ([installation guide](https://docs.databricks.com/en/dev-tools/cli/install.html))
+
+### For Production Use (Using Existing SFTP Servers):
 - Databricks workspace with Unity Catalog enabled
-- Azure CLI installed locally
+- Access to existing SFTP servers (host, username, SSH keys)
 - Python 3.9+
 
 ## Quick Start - End-to-End Setup
 
-Follow these steps in order to set up and run the complete SFTP data pipeline:
+### Option A: Demo Setup with Azure Storage (Creates SFTP Infrastructure)
 
-### Step 1: Setup Azure Infrastructure (Local Machine)
+Follow these steps to set up a complete demo environment with Azure Storage as SFTP servers.
+
+#### Step 0: Configure Azure and Databricks CLI (Local Machine)
+
+Before running the setup scripts, ensure your CLI tools are configured:
+
+**Install and Configure Azure CLI:**
+```bash
+# Install Azure CLI (if not already installed)
+# macOS
+brew install azure-cli
+
+# Windows
+# Download from: https://aka.ms/installazurecliwindows
+
+# Linux
+curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
+# Login to Azure
+az login
+
+# Set your subscription (if you have multiple)
+az account list --output table
+az account set --subscription "<subscription-id>"
+
+# Verify login
+az account show
+```
+
+**Install and Configure Databricks CLI:**
+```bash
+# Install Databricks CLI
+pip install databricks-cli
+
+# Configure with your Databricks workspace
+databricks configure --token
+# Enter your Databricks workspace URL (e.g., https://adb-123456789.azuredatabricks.net)
+# Enter your personal access token
+
+# Verify configuration
+databricks workspace ls /
+```
+
+**Configure Environment Variables:**
+```bash
+# Copy the example configuration file
+cp config/.env.example config/.env
+
+# Edit config/.env with your values
+# Update storage account names to be globally unique
+nano config/.env  # or use your preferred editor
+```
+
+#### Step 1: Setup Azure Infrastructure (Local Machine)
 
 Run the Azure setup script on your local machine:
 
@@ -181,6 +239,39 @@ with writer.session():
 - `customer_summary.csv` - Aggregated customer metrics
 - `order_analytics.csv` - Order statistics and trends
 
+### Option B: Production Setup with Existing SFTP Servers
+
+If you have existing SFTP servers and don't need the demo Azure infrastructure:
+
+#### Step 1: Prepare SSH Keys and Credentials (Local Machine)
+
+Ensure you have:
+- SSH private key for SFTP authentication
+- SFTP connection details (host, username, port)
+
+#### Step 2: Configure Databricks Secrets (Local Machine)
+
+Manually create Databricks secrets:
+```bash
+# Create secret scope
+databricks secrets create-scope --scope sftp-credentials
+
+# Store source SFTP credentials
+echo "source.sftp.hostname.com" | databricks secrets put-secret --scope sftp-credentials --key source-host
+echo "sourceuser" | databricks secrets put-secret --scope sftp-credentials --key source-username
+
+# Store target SFTP credentials
+echo "target.sftp.hostname.com" | databricks secrets put-secret --scope sftp-credentials --key target-host
+echo "targetuser" | databricks secrets put-secret --scope sftp-credentials --key target-username
+
+# Upload SSH private key to DBFS
+databricks fs cp ~/.ssh/your_sftp_key dbfs:/FileStore/ssh-keys/sftp_key
+```
+
+#### Step 3: Continue with Databricks Setup
+
+Proceed directly to Step 3 (Install Package and Verify Setup) in the Databricks notebooks.
+
 ## Project Structure
 
 ```
@@ -193,14 +284,14 @@ databricks-sftp-data-source/
 │   ├── setup_azure_infrastructure.sh    # Azure resources setup
 │   └── setup_databricks_secrets.sh      # Databricks secrets configuration
 ├── notebooks/                 # Databricks notebooks (run in Databricks)
-│   ├── 00_prerequisites.ipynb           # Setup instructions
 │   ├── 01_infrastructure_setup.ipynb    # Package install & verification
 │   ├── 02_uc_connection_setup.ipynb     # Unity Catalog setup
 │   └── 03_dlt_pipeline.ipynb            # DLT pipeline
 ├── data/                      # Sample CSV files
 │   ├── customers.csv
 │   └── orders.csv
-├── config/                    # Configuration templates
+├── config/                    # Configuration files
+│   ├── .env.example                     # Environment variables template
 │   ├── sftp_config.template.json
 │   ├── azure_config.template.sh
 │   └── dlt_pipeline_config.json

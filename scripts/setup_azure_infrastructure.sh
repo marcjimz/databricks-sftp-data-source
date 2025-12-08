@@ -1,10 +1,17 @@
 #!/bin/bash
 # Setup Azure Storage accounts with SFTP enabled for Databricks integration
-# Run this script on your local machine with Azure CLI installed
+# Run this script on your local machine with Azure CLI installed and logged in
 
 set -e  # Exit on error
 
-# Configuration variables
+# Load configuration from .env file if it exists
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/../config/.env" ]; then
+    echo "Loading configuration from config/.env..."
+    source "$SCRIPT_DIR/../config/.env"
+fi
+
+# Configuration variables (can be overridden by environment variables)
 RESOURCE_GROUP="${RESOURCE_GROUP:-rg-databricks-sftp-demo}"
 LOCATION="${LOCATION:-eastus}"
 SOURCE_STORAGE="${SOURCE_STORAGE:-sftpsourcestorage001}"
@@ -14,9 +21,24 @@ TARGET_CONTAINER="${TARGET_CONTAINER:-target-data}"
 SFTP_USER="${SFTP_USER:-sftpuser}"
 SSH_KEY_PATH="${SSH_KEY_PATH:-$HOME/.ssh/sftp_key}"
 
+# Check Azure CLI is installed
+if ! command -v az &> /dev/null; then
+    echo "Error: Azure CLI is not installed"
+    echo "Install from: https://docs.microsoft.com/en-us/cli/azure/install-azure-cli"
+    exit 1
+fi
+
+# Check Azure CLI is logged in
+if ! az account show &> /dev/null; then
+    echo "Error: Not logged in to Azure"
+    echo "Please run: az login"
+    exit 1
+fi
+
 echo "========================================="
 echo "Azure SFTP Infrastructure Setup"
 echo "========================================="
+echo "Subscription: $(az account show --query name -o tsv)"
 echo "Resource Group: $RESOURCE_GROUP"
 echo "Location: $LOCATION"
 echo "Source Storage: $SOURCE_STORAGE"

@@ -22,46 +22,31 @@ wheels/
 
 # Virtual environments
 venv/
-env/
 ENV/
+env/
 
-# IDEs
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# Jupyter
-.ipynb_checkpoints/
-*.ipynb_checkpoints
+# OS
+.DS_Store
+Thumbs.db
 
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
+# Databricks
+.databricks/
 
-# SSH Keys
+# Secrets
 *.pem
 *.key
 id_rsa*
 sftp_key*
 
-# Configuration (user-specific)
+# Local config
 config/azure_config.sh
-config/sftp_config.json
-
-# Databricks
-.databricks/
-
-# Hive Mind / Claude Flow
-.claude-flow/
-.hive-mind/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Secrets
-*.secret
-.env
+config/.env
+.claude-flow/*
+.hive-mind*

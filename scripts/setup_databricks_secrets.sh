@@ -4,20 +4,26 @@
 
 set -e  # Exit on error
 
-# Configuration variables
+# Load configuration from .env file if it exists
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/../config/.env" ]; then
+    echo "Loading configuration from config/.env..."
+    source "$SCRIPT_DIR/../config/.env"
+fi
+
+# Configuration variables (can be overridden by environment variables)
 SOURCE_STORAGE="${SOURCE_STORAGE:-sftpsourcestorage001}"
 TARGET_STORAGE="${TARGET_STORAGE:-sftptargetstorage001}"
 SFTP_USER="${SFTP_USER:-sftpuser}"
 SSH_KEY_PATH="${SSH_KEY_PATH:-$HOME/.ssh/sftp_key}"
 SECRET_SCOPE="${SECRET_SCOPE:-sftp-credentials}"
 
-echo "========================================="
-echo "Databricks Secrets Setup"
-echo "========================================="
-echo "Secret Scope: $SECRET_SCOPE"
-echo "SSH Key Path: $SSH_KEY_PATH"
-echo "========================================="
-echo ""
+# Check if Databricks CLI is installed
+if ! command -v databricks &> /dev/null; then
+    echo "Error: Databricks CLI is not installed"
+    echo "Install from: https://docs.databricks.com/en/dev-tools/cli/install.html"
+    exit 1
+fi
 
 # Check if Databricks CLI is configured
 if ! databricks workspace ls / > /dev/null 2>&1; then
@@ -25,6 +31,23 @@ if ! databricks workspace ls / > /dev/null 2>&1; then
     echo "Please run: databricks configure --token"
     exit 1
 fi
+
+# Check if Azure CLI is logged in (needed to get storage account details)
+if ! az account show &> /dev/null; then
+    echo "Error: Not logged in to Azure"
+    echo "Please run: az login"
+    exit 1
+fi
+
+echo "========================================="
+echo "Databricks Secrets Setup"
+echo "========================================="
+echo "Secret Scope: $SECRET_SCOPE"
+echo "SSH Key Path: $SSH_KEY_PATH"
+echo "Source Storage: $SOURCE_STORAGE"
+echo "Target Storage: $TARGET_STORAGE"
+echo "========================================="
+echo ""
 
 # Step 1: Create Secret Scope
 echo "Step 1: Creating secret scope..."
