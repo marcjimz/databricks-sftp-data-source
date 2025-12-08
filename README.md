@@ -102,11 +102,10 @@ nano config/.env  # or use your preferred editor
 
 #### Step 1: Setup Azure Infrastructure (Local Machine)
 
-Run the Azure setup script on your local machine:
+Run the Azure setup script from the repository root:
 
 ```bash
-cd scripts
-./setup_azure_infrastructure.sh
+./scripts/setup_azure_infrastructure.sh
 ```
 
 **What this script does:**
@@ -126,11 +125,10 @@ cd scripts
 
 ### Step 2: Configure Databricks Secrets (Local Machine)
 
-Run the Databricks secrets setup script on your local machine:
+Run the Databricks secrets setup script from the repository root:
 
 ```bash
-cd scripts
-./setup_databricks_secrets.sh
+./scripts/setup_databricks_secrets.sh
 ```
 
 **Prerequisites:**
