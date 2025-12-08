@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# SSH Keys
+*.pem
+*.key
+id_rsa*
+sftp_key*
+
+# Configuration (user-specific)
+config/azure_config.sh
+config/sftp_config.json
+
+# Databricks
+.databricks/
+
+# Hive Mind / Claude Flow
+.claude-flow/
+.hive-mind/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+*.secret
+.env

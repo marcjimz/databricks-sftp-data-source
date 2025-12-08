@@ -1,0 +1,13 @@
+# Core dependencies
+paramiko>=3.3.0
+pyspark>=3.5.0
+
+# Data processing
+pandas>=2.0.0
+
+# Development dependencies
+pytest>=7.4.0
+pytest-cov>=4.1.0
+black>=23.7.0
+flake8>=6.1.0
+mypy>=1.5.0
