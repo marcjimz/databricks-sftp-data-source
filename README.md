@@ -186,14 +186,15 @@ Run the Databricks secrets setup script from the repository root:
 **Notebook**: `notebooks/01_infrastructure_setup.ipynb`
 
 Run this notebook in your Databricks workspace to:
-- Install the SFTP package from requirements.txt
-- Verify secrets and SSH keys are configured correctly
+- Install the SFTP package from requirements.txt using relative paths (`%pip install -r ../requirements.txt`)
+- Verify secrets are configured correctly (host, username, SSH private key)
+- Retrieve SSH private key from secrets and create temporary file for authentication
 - Test SFTP connections to source and target
 - Save configuration to Unity Catalog
 
 **What you'll have after this step:**
 - SFTP package installed in Databricks
-- Verified SFTP connectivity
+- Verified SFTP connectivity using credentials from secrets
 - Configuration saved to Unity Catalog
 
 ### Step 4: Set Up Unity Catalog Connections (Databricks)
