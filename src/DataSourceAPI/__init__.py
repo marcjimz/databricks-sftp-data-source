@@ -1,5 +1,5 @@
 """
-Databricks SFTP Data Source - Ingest Module
+Databricks SFTP Data Source API
 A custom data source for writing data to SFTP using Paramiko and Databricks Python Data Source API.
 """
 

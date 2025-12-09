@@ -7,31 +7,25 @@
 # MAGIC 2. Processes and transforms data through bronze → silver → gold layers
 # MAGIC 3. Writes processed data back to target SFTP using custom SFTP data source
 # MAGIC
+# MAGIC **Prerequisites:**
+# MAGIC - Install the package: `pip install -e /Workspace/Repos/<your-repo>/databricks-sftp-data-source`
+# MAGIC - Configure DLT pipeline settings with catalog and connection parameters
+# MAGIC
 # MAGIC **Note:** This should be run as a DLT pipeline in Databricks.
 
 # COMMAND ----------
 
-import sys
-import os
 import tempfile
+import os
 import dlt
 from pyspark.sql import functions as F, SparkSession
 
 # Get spark session
 spark = SparkSession.builder.getOrCreate()
 
-# Add src folder to Python path for DLT
-# For DLT, we need to calculate the path relative to the pipeline file location
-pipeline_file_path = os.path.abspath(__file__)
-notebooks_dir = os.path.dirname(pipeline_file_path)
-repo_root = os.path.dirname(notebooks_dir)
-src_path = os.path.join(repo_root, 'src')
-
-if src_path not in sys.path:
-    sys.path.insert(0, src_path)
-
-# Import custom SFTP package
-from ingest import SFTPDataSource
+# Import custom SFTP Data Source API (installed via pip install -e .)
+# Ensure the package is installed before running this pipeline: pip install -e /path/to/repo
+from DataSourceAPI import SFTPDataSource
 
 # COMMAND ----------
 
