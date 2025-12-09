@@ -260,72 +260,62 @@ def export_to_sftp():
 
     This should be run AFTER the DLT pipeline completes to export
     the processed data back to the target SFTP server.
-    """
-    import tempfile
-    import os
 
-    # Get SSH private key from secrets and write to temporary file
+    Note: Uses private_key_content option - each Spark executor creates its own
+    temporary key file from the content (not from a driver-side file path).
+    """
+    # Get SSH private key content from secrets
     from pyspark.dbutils import DBUtils
     dbutils = DBUtils(spark)
 
     ssh_key_content = dbutils.secrets.get(scope=SECRET_SCOPE, key=SSH_KEY_SECRET)
-    tmp_key_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='_sftp_key')
-    tmp_key_file.write(ssh_key_content)
-    tmp_key_file.close()
-    os.chmod(tmp_key_file.name, 0o600)
 
-    try:
-        print("="*70)
-        print("Exporting Gold Layer Data to Target SFTP")
-        print("="*70)
-        print(f"Target: {TARGET_USERNAME}@{TARGET_HOST}")
-        print(f"Technology: Paramiko SSHv2 + Databricks Python Data Source API\n")
+    print("="*70)
+    print("Exporting Gold Layer Data to Target SFTP")
+    print("="*70)
+    print(f"Target: {TARGET_USERNAME}@{TARGET_HOST}")
+    print(f"Technology: Paramiko SSHv2 + Databricks Python Data Source API")
+    print(f"Distribution: Each Spark executor creates local temp key file\n")
 
-        # Export customer summary
-        print("1. Exporting customer summary...")
-        customer_summary_df = spark.table(f"{CATALOG_NAME}.gold.gold_customer_summary")
+    # Export customer summary
+    print("1. Exporting customer summary...")
+    customer_summary_df = spark.table(f"{CATALOG_NAME}.gold.gold_customer_summary")
 
-        customer_summary_df.write \
-            .format("sftp") \
-            .option("host", TARGET_HOST) \
-            .option("username", TARGET_USERNAME) \
-            .option("private_key_path", tmp_key_file.name) \
-            .option("port", "22") \
-            .option("path", "/customer_summary.csv") \
-            .option("format", "csv") \
-            .option("header", "true") \
-            .mode("overwrite") \
-            .save()
+    customer_summary_df.write \
+        .format("sftp") \
+        .option("host", TARGET_HOST) \
+        .option("username", TARGET_USERNAME) \
+        .option("private_key_content", ssh_key_content) \
+        .option("port", "22") \
+        .option("path", "/customer_summary.csv") \
+        .option("format", "csv") \
+        .option("header", "true") \
+        .mode("overwrite") \
+        .save()
 
-        print(f"   ✓ Exported {customer_summary_df.count()} rows to /customer_summary.csv")
+    print(f"   ✓ Exported {customer_summary_df.count()} rows to /customer_summary.csv")
 
-        # Export customer orders
-        print("\n2. Exporting customer orders...")
-        customer_orders_df = spark.table(f"{CATALOG_NAME}.gold.gold_customer_orders")
+    # Export customer orders
+    print("\n2. Exporting customer orders...")
+    customer_orders_df = spark.table(f"{CATALOG_NAME}.gold.gold_customer_orders")
 
-        customer_orders_df.write \
-            .format("sftp") \
-            .option("host", TARGET_HOST) \
-            .option("username", TARGET_USERNAME) \
-            .option("private_key_path", tmp_key_file.name) \
-            .option("port", "22") \
-            .option("path", "/customer_orders.csv") \
-            .option("format", "csv") \
-            .option("header", "true") \
-            .mode("overwrite") \
-            .save()
+    customer_orders_df.write \
+        .format("sftp") \
+        .option("host", TARGET_HOST) \
+        .option("username", TARGET_USERNAME) \
+        .option("private_key_content", ssh_key_content) \
+        .option("port", "22") \
+        .option("path", "/customer_orders.csv") \
+        .option("format", "csv") \
+        .option("header", "true") \
+        .mode("overwrite") \
+        .save()
 
-        print(f"   ✓ Exported {customer_orders_df.count()} rows to /customer_orders.csv")
+    print(f"   ✓ Exported {customer_orders_df.count()} rows to /customer_orders.csv")
 
-        print("\n" + "="*70)
-        print("Export to Target SFTP Complete!")
-        print("="*70)
-
-    finally:
-        # Clean up temporary key file
-        if os.path.exists(tmp_key_file.name):
-            os.remove(tmp_key_file.name)
-            print("\n✓ Cleaned up temporary SSH key file")
+    print("\n" + "="*70)
+    print("Export to Target SFTP Complete!")
+    print("="*70)
 
 # COMMAND ----------
 
