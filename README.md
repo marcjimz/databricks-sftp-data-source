@@ -317,13 +317,13 @@ Manually create Databricks secrets:
 # Create secret scope
 databricks secrets create-scope sftp-credentials
 
-# Store source SFTP credentials
-echo "source.sftp.hostname.com" | databricks secrets put-secret sftp-credentials source-host
-echo "sourceuser" | databricks secrets put-secret sftp-credentials source-username
+# Store source SFTP credentials (use -n to avoid adding newline)
+echo -n "source.sftp.hostname.com" | databricks secrets put-secret sftp-credentials source-host
+echo -n "sourceuser" | databricks secrets put-secret sftp-credentials source-username
 
 # Store target SFTP credentials
-echo "target.sftp.hostname.com" | databricks secrets put-secret sftp-credentials target-host
-echo "targetuser" | databricks secrets put-secret sftp-credentials target-username
+echo -n "target.sftp.hostname.com" | databricks secrets put-secret sftp-credentials target-host
+echo -n "targetuser" | databricks secrets put-secret sftp-credentials target-username
 
 # Store SSH private key content in secrets
 cat ~/.ssh/your_sftp_key | databricks secrets put-secret sftp-credentials ssh-private-key

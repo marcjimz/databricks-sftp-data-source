@@ -117,15 +117,15 @@ echo ""
 
 # Step 3: Store Source SFTP Credentials
 echo "Step 3: Storing source SFTP credentials..."
-echo "$SOURCE_ENDPOINT" | databricks secrets put-secret $PROFILE_FLAG "$SECRET_SCOPE" source-host
-echo "$SOURCE_USERNAME" | databricks secrets put-secret $PROFILE_FLAG "$SECRET_SCOPE" source-username
+echo -n "$SOURCE_ENDPOINT" | databricks secrets put-secret $PROFILE_FLAG "$SECRET_SCOPE" source-host
+echo -n "$SOURCE_USERNAME" | databricks secrets put-secret $PROFILE_FLAG "$SECRET_SCOPE" source-username
 echo "✓ Source SFTP credentials stored"
 echo ""
 
 # Step 4: Store Target SFTP Credentials
 echo "Step 4: Storing target SFTP credentials..."
-echo "$TARGET_ENDPOINT" | databricks secrets put-secret $PROFILE_FLAG "$SECRET_SCOPE" target-host
-echo "$TARGET_USERNAME" | databricks secrets put-secret $PROFILE_FLAG "$SECRET_SCOPE" target-username
+echo -n "$TARGET_ENDPOINT" | databricks secrets put-secret $PROFILE_FLAG "$SECRET_SCOPE" target-host
+echo -n "$TARGET_USERNAME" | databricks secrets put-secret $PROFILE_FLAG "$SECRET_SCOPE" target-username
 echo "✓ Target SFTP credentials stored"
 echo ""
 
