@@ -144,12 +144,12 @@ echo ""
 # Step 6: Get and Store SSH Host Key Fingerprint
 echo "Step 6: Retrieving SSH host key fingerprint..."
 
-# Create temporary file for host key
+# Create temporary file for host key (use ECDSA for Azure Storage)
 TMP_HOST_KEY=$(mktemp)
 trap "rm -f $TMP_HOST_KEY" EXIT
 
-# Get the SSH host key
-ssh-keyscan -p 22 -t rsa "$SOURCE_ENDPOINT" 2>/dev/null | grep "^$SOURCE_ENDPOINT" | head -n 1 > "$TMP_HOST_KEY"
+# Get the SSH host key (ECDSA type for Azure Storage SFTP)
+ssh-keyscan -p 22 -t ecdsa "$SOURCE_ENDPOINT" 2>/dev/null | grep "^$SOURCE_ENDPOINT" | head -n 1 > "$TMP_HOST_KEY"
 
 if [ ! -s "$TMP_HOST_KEY" ]; then
     echo "Error: Could not retrieve SSH host key from $SOURCE_ENDPOINT"
@@ -171,7 +171,7 @@ if [ -z "$SSH_FINGERPRINT" ]; then
     exit 1
 fi
 
-echo "✓ SSH fingerprint retrieved: $SSH_FINGERPRINT"
+echo "✓ SSH fingerprint retrieved: $SSH_FINGERPRINT (ECDSA)"
 echo -n "$SSH_FINGERPRINT" | databricks secrets put-secret $PROFILE_FLAG "$SECRET_SCOPE" ssh-key-fingerprint
 echo "✓ SSH key fingerprint stored in secrets"
 
