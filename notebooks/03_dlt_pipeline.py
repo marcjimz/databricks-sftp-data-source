@@ -235,3 +235,112 @@ def gold_customer_summary():
         )
         .withColumn("processed_timestamp", F.current_timestamp())
     )
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Export to Target SFTP
+# MAGIC
+# MAGIC Use custom SFTP Data Source API to write processed data back to target SFTP.
+
+# COMMAND ----------
+
+# Register SFTP data source
+spark.dataSource.register(SFTPDataSource)
+
+print("✓ SFTP data source registered with Spark")
+print(f"  Available as: .format('sftp')")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Export Function
+# MAGIC
+# MAGIC This function exports gold layer data to target SFTP using the Spark DataSource API.
+
+# COMMAND ----------
+
+def export_to_sftp():
+    """
+    Export gold layer data to target SFTP using Spark DataSource API.
+
+    This should be run AFTER the DLT pipeline completes to export
+    the processed data back to the target SFTP server.
+    """
+    import tempfile
+    import os
+
+    # Get SSH private key from secrets and write to temporary file
+    from pyspark.dbutils import DBUtils
+    dbutils = DBUtils(spark)
+
+    ssh_key_content = dbutils.secrets.get(scope=SECRET_SCOPE, key=SSH_KEY_SECRET)
+    tmp_key_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='_sftp_key')
+    tmp_key_file.write(ssh_key_content)
+    tmp_key_file.close()
+    os.chmod(tmp_key_file.name, 0o600)
+
+    try:
+        print("="*70)
+        print("Exporting Gold Layer Data to Target SFTP")
+        print("="*70)
+        print(f"Target: {TARGET_USERNAME}@{TARGET_HOST}")
+        print(f"Technology: Paramiko SSHv2 + Databricks Python Data Source API\n")
+
+        # Export customer summary
+        print("1. Exporting customer summary...")
+        customer_summary_df = spark.table(f"{CATALOG_NAME}.gold.gold_customer_summary")
+
+        customer_summary_df.write \
+            .format("sftp") \
+            .option("host", TARGET_HOST) \
+            .option("username", TARGET_USERNAME) \
+            .option("private_key_path", tmp_key_file.name) \
+            .option("port", "22") \
+            .option("path", "/customer_summary.csv") \
+            .option("format", "csv") \
+            .option("header", "true") \
+            .mode("overwrite") \
+            .save()
+
+        print(f"   ✓ Exported {customer_summary_df.count()} rows to /customer_summary.csv")
+
+        # Export customer orders
+        print("\n2. Exporting customer orders...")
+        customer_orders_df = spark.table(f"{CATALOG_NAME}.gold.gold_customer_orders")
+
+        customer_orders_df.write \
+            .format("sftp") \
+            .option("host", TARGET_HOST) \
+            .option("username", TARGET_USERNAME) \
+            .option("private_key_path", tmp_key_file.name) \
+            .option("port", "22") \
+            .option("path", "/customer_orders.csv") \
+            .option("format", "csv") \
+            .option("header", "true") \
+            .mode("overwrite") \
+            .save()
+
+        print(f"   ✓ Exported {customer_orders_df.count()} rows to /customer_orders.csv")
+
+        print("\n" + "="*70)
+        print("Export to Target SFTP Complete!")
+        print("="*70)
+
+    finally:
+        # Clean up temporary key file
+        if os.path.exists(tmp_key_file.name):
+            os.remove(tmp_key_file.name)
+            print("\n✓ Cleaned up temporary SSH key file")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Run Export
+# MAGIC
+# MAGIC Uncomment the line below to run the export after the DLT pipeline completes.
+
+# COMMAND ----------
+
+# Uncomment to run export
+# export_to_sftp()
