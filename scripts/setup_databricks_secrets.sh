@@ -141,8 +141,28 @@ cat "$SSH_KEY_PATH" | databricks secrets put-secret $PROFILE_FLAG "$SECRET_SCOPE
 echo "✓ SSH private key stored in secrets"
 echo ""
 
-# Step 6: Verify Setup
-echo "Step 6: Verifying setup..."
+# Step 6: Get and Store SSH Host Key Fingerprint
+echo "Step 6: Retrieving SSH host key fingerprint..."
+SSH_HOST_KEY=$(ssh-keyscan -p 22 -t rsa "$SOURCE_ENDPOINT" 2>/dev/null | head -n 1)
+if [ -z "$SSH_HOST_KEY" ]; then
+    echo "Error: Could not retrieve SSH host key from $SOURCE_ENDPOINT"
+    exit 1
+fi
+
+# Extract the public key and get fingerprint
+SSH_FINGERPRINT=$(echo "$SSH_HOST_KEY" | cut -d' ' -f2- | ssh-keygen -lf - 2>/dev/null | awk '{print $2}')
+if [ -z "$SSH_FINGERPRINT" ]; then
+    echo "Error: Could not generate SSH fingerprint"
+    exit 1
+fi
+
+echo "✓ SSH fingerprint retrieved: $SSH_FINGERPRINT"
+echo -n "$SSH_FINGERPRINT" | databricks secrets put-secret $PROFILE_FLAG "$SECRET_SCOPE" ssh-key-fingerprint
+echo "✓ SSH key fingerprint stored in secrets"
+echo ""
+
+# Step 7: Verify Setup
+echo "Step 7: Verifying setup..."
 echo "Secrets in scope '$SECRET_SCOPE':"
 databricks secrets list-secrets $PROFILE_FLAG "$SECRET_SCOPE"
 echo ""
@@ -157,6 +177,7 @@ echo "  - source-username: $SOURCE_USERNAME"
 echo "  - target-host: $TARGET_ENDPOINT"
 echo "  - target-username: $TARGET_USERNAME"
 echo "  - ssh-private-key: (SSH private key content)"
+echo "  - ssh-key-fingerprint: $SSH_FINGERPRINT"
 echo ""
 echo "Next step:"
 echo "  Open Databricks and run notebook: 01_infrastructure_setup.ipynb"
