@@ -1,6 +1,2 @@
 # Core dependencies
 paramiko==3.4.0
-pyspark==3.5.0
-
-# Data processing
-pandas==2.1.4
