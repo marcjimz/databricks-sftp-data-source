@@ -104,6 +104,7 @@ class SFTPWriter(DataSourceWriter):
         # Create SFTP connection and write
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        sftp = None
 
         try:
             # Connect with private key or password
@@ -152,10 +153,17 @@ class SFTPWriter(DataSourceWriter):
             )
 
         except Exception as e:
-            if sftp:
-                sftp.close()
-            if client:
-                client.close()
+            # Clean up connections on error
+            try:
+                if sftp:
+                    sftp.close()
+            except:
+                pass
+            try:
+                if client:
+                    client.close()
+            except:
+                pass
             raise RuntimeError(f"Failed to write partition {partition_id} to SFTP: {e}")
 
     def commit(self, messages: List[SFTPCommitMessage]) -> None:
