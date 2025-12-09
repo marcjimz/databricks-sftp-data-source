@@ -23,9 +23,9 @@ from pyspark.sql import functions as F, SparkSession
 # Get spark session
 spark = SparkSession.builder.getOrCreate()
 
-# Import custom SFTP Data Source API (installed via pip install -e .)
+# Import custom SFTP Data Source (installed via pip install -e .)
 # Ensure the package is installed before running this pipeline: pip install -e /path/to/repo
-from DataSourceAPI import SFTPDataSource
+from CustomDataSource import SFTPDataSource
 
 # COMMAND ----------
 
