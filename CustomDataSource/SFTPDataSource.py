@@ -210,9 +210,95 @@ class SFTPWriter(DataSourceWriter):
                 sftp.mkdir(dir_path)
 
 
+class SFTPConnectionTester:
+    """
+    Utility class for testing SFTP connections.
+
+    This is separate from the Spark DataSource API and used for connection verification.
+    """
+
+    def __init__(self, host: str, username: str, private_key_path: str = None,
+                 password: str = None, port: int = 22):
+        """
+        Initialize SFTP connection tester.
+
+        Args:
+            host: SFTP server hostname
+            username: SFTP username
+            private_key_path: Path to SSH private key file
+            password: Password for authentication (alternative to private_key)
+            port: SFTP port (default: 22)
+        """
+        self.host = host
+        self.username = username
+        self.private_key_path = private_key_path
+        self.password = password
+        self.port = port
+        self._client = None
+        self._sftp = None
+
+    def connect(self):
+        """Establish SFTP connection"""
+        import paramiko
+
+        self._client = paramiko.SSHClient()
+        self._client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        auth_kwargs = {
+            "hostname": self.host,
+            "port": self.port,
+            "username": self.username,
+            "timeout": 30
+        }
+
+        if self.private_key_path:
+            private_key = paramiko.RSAKey.from_private_key_file(self.private_key_path)
+            auth_kwargs["pkey"] = private_key
+        elif self.password:
+            auth_kwargs["password"] = self.password
+        else:
+            raise ValueError("Either private_key_path or password must be provided")
+
+        self._client.connect(**auth_kwargs)
+        self._sftp = self._client.open_sftp()
+        return self
+
+    def disconnect(self):
+        """Close SFTP connection"""
+        if self._sftp:
+            self._sftp.close()
+        if self._client:
+            self._client.close()
+
+    def __enter__(self):
+        """Context manager entry"""
+        return self.connect()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit"""
+        self.disconnect()
+
+    def list_files(self, remote_dir: str = "."):
+        """
+        List files in remote directory.
+
+        Args:
+            remote_dir: Remote directory path
+
+        Returns:
+            List of file names
+        """
+        if not self._sftp:
+            raise RuntimeError("Not connected. Call connect() first or use context manager.")
+        return self._sftp.listdir(remote_dir)
+
+
 class SFTPDataSource(DataSource):
     """
     SFTP Data Source for Databricks
+
+    This class implements the Databricks Python Data Source API for SFTP writes.
+    For connection testing, use SFTPConnectionTester instead.
 
     Example usage:
         # Register the data source
