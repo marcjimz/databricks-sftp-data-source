@@ -1,0 +1,2 @@
+# Core dependencies
+paramiko==3.4.0

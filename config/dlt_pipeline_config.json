@@ -1,0 +1,27 @@
+{
+  "name": "SFTP Data Pipeline",
+  "storage": "/dbfs/sftp_demo/dlt",
+  "target": "sftp_demo",
+  "continuous": false,
+  "development": true,
+  "clusters": [
+    {
+      "label": "default",
+      "autoscale": {
+        "min_workers": 1,
+        "max_workers": 2
+      }
+    }
+  ],
+  "libraries": [
+    {
+      "notebook": {
+        "path": "/Workspace/Repos/<your-repo>/databricks-sftp-data-source/notebooks/03_dlt_pipeline"
+      }
+    }
+  ],
+  "configuration": {
+    "spark.databricks.delta.schema.autoMerge.enabled": "true",
+    "spark.databricks.delta.optimizeWrite.enabled": "true"
+  }
+}

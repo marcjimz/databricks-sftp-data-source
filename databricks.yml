@@ -1,0 +1,126 @@
+# Databricks Asset Bundle Configuration for SFTP Data Source
+bundle:
+  name: databricks-sftp-datasource
+
+variables:
+  catalog_name:
+    description: "Unity Catalog catalog name"
+    default: "main"
+
+  schema_name:
+    description: "Unity Catalog schema name"
+    default: "sftp_pipeline"
+
+  source_sftp_connection:
+    description: "Source SFTP connection name"
+    default: "sftp_source_connection"
+
+  target_sftp_connection:
+    description: "Target SFTP connection name"
+    default: "sftp_target_connection"
+
+  vector_search_endpoint:
+    description: "Vector search endpoint (optional)"
+    default: "sftp_pipeline_endpoint"
+
+resources:
+  jobs:
+    sftp_e2e_pipeline:
+      name: "SFTP AutoLoader Pipeline - E2E Demo"
+      description: |
+        End-to-end SFTP data pipeline demonstration:
+
+        Pipeline stages:
+        1. Infrastructure Setup: Create UC catalog, schema, connections
+        2. UC Connections: Configure source and target SFTP connections
+        3. DLT Pipeline: Bronze → Silver → Gold with AutoLoader and custom SFTP writer
+
+        This pipeline demonstrates:
+        - Reading from SFTP with AutoLoader
+        - Processing with Delta Live Tables
+        - Writing back to SFTP with custom Paramiko data source
+
+      max_concurrent_runs: 1
+      timeout_seconds: 3600  # 1 hour
+
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+
+      job_clusters:
+        - job_cluster_key: sftp_cluster
+          new_cluster:
+            spark_version: "15.4.x-scala2.12"
+            node_type_id: "i3.xlarge"
+            num_workers: 2
+            custom_tags:
+              project: "sftp-datasource"
+              environment: "${bundle.target}"
+
+      tasks:
+        # Task 1: Infrastructure Setup
+        - task_key: infrastructure_setup
+          job_cluster_key: sftp_cluster
+          notebook_task:
+            notebook_path: "${workspace.file_path}/notebooks/01_infrastructure_setup"
+            source: WORKSPACE
+          timeout_seconds: 900
+          libraries:
+            - pypi:
+                package: "paramiko>=3.4.0"
+            - pypi:
+                package: "pyyaml>=6.0"
+
+        # Task 2: UC Connection Setup
+        - task_key: uc_connection_setup
+          depends_on:
+            - task_key: infrastructure_setup
+          job_cluster_key: sftp_cluster
+          notebook_task:
+            notebook_path: "${workspace.file_path}/notebooks/02_uc_connection_setup"
+            source: WORKSPACE
+          timeout_seconds: 600
+          libraries:
+            - pypi:
+                package: "paramiko>=3.4.0"
+
+        # Task 3: DLT Pipeline Execution
+        - task_key: dlt_pipeline_execution
+          depends_on:
+            - task_key: uc_connection_setup
+          job_cluster_key: sftp_cluster
+          notebook_task:
+            notebook_path: "${workspace.file_path}/notebooks/03_dlt_pipeline"
+            source: WORKSPACE
+          timeout_seconds: 1800
+          libraries:
+            - pypi:
+                package: "paramiko>=3.4.0"
+            - pypi:
+                package: "pyyaml>=6.0"
+
+targets:
+  dev:
+    default: true
+    mode: development
+    workspace:
+      host: ${DATABRICKS_HOST}
+    variables:
+      catalog_name: "dev_catalog"
+      schema_name: "sftp_pipeline_dev"
+
+  prod:
+    mode: production
+    workspace:
+      host: ${DATABRICKS_HOST}
+    variables:
+      catalog_name: "prod_catalog"
+      schema_name: "sftp_pipeline_prod"
+    resources:
+      jobs:
+        sftp_e2e_pipeline:
+          email_notifications:
+            on_success:
+              - your-team@company.com
+            on_failure:
+              - your-team@company.com
