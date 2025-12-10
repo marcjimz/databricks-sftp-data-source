@@ -1,34 +1,42 @@
 # Databricks SFTP Data Source
 
-A complete example demonstrating how to build a data pipeline that reads from SFTP using Databricks AutoLoader and writes back to SFTP using a custom data source built with Paramiko.
+A custom Databricks data source demonstrating how to read from SFTP using AutoLoader and write to SFTP using Paramiko SSHv2 library with the Python Data Source API.
 
 ## Overview
 
 This repository contains:
 
-1. **Custom SFTP Data Source** - Python package using Paramiko SSHv2 for writing data to SFTP
-2. **Sample Data** - Example CSV files (customers, orders)
-3. **Infrastructure Notebooks** - Step-by-step setup for Azure Storage with SFTP enabled
-4. **DLT Pipeline** - Complete Delta Live Tables pipeline with Bronze → Silver → Gold layers
+1. **Custom SFTP Data Source** - Python package using Paramiko SSHv2 for writing data to SFTP via Databricks Data Source API
+2. **Sample Data** - Example CSV files (customers.csv)
+3. **Infrastructure Setup** - Complete Azure Storage with SFTP setup scripts
+4. **Demo Notebooks** - Step-by-step demonstration of reading and writing with SFTP
 
 ## Architecture
 
 ```
-┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
-│  Source SFTP    │      │  Bronze Layer   │      │  Silver Layer   │      │   Gold Layer    │      │  Target SFTP    │
-│ (Azure Storage) │ ───> │   (Raw Data)    │ ───> │ (Validated Data)│ ───> │(Business Metrics)│ ───> │ (Azure Storage) │
-└─────────────────┘      └─────────────────┘      └─────────────────┘      └─────────────────┘      └─────────────────┘
-   AutoLoader             Cleaning &               Aggregation &            Custom SFTP
-   Ingestion              Validation               Enrichment               Data Source
+┌─────────────────┐                          ┌─────────────────┐
+│  Source SFTP    │      AutoLoader          │  Databricks     │
+│ (Azure Storage) │ ──────────────────────>  │    Streaming    │
+└─────────────────┘      (Read)              │    DataFrame    │
+                                              └─────────────────┘
+                                                      │
+                                                      │ Custom
+                                                      │ Data Source
+                                                      │ (Paramiko)
+                                                      ▼
+                                              ┌─────────────────┐
+                                              │  Target SFTP    │
+                                              │ (Azure Storage) │
+                                              └─────────────────┘
 ```
 
 ## Features
 
-- **AutoLoader Integration**: Leverage Databricks AutoLoader to incrementally read from SFTP
-- **Custom Data Source**: Write data back to SFTP using Paramiko SSHv2
-- **Unity Catalog**: Manage SFTP connections through Unity Catalog
-- **Delta Live Tables**: Full DLT pipeline with data quality expectations
-- **Medallion Architecture**: Bronze → Silver → Gold data layers
+- **AutoLoader Integration**: Read from SFTP using Databricks built-in AutoLoader
+- **Custom Data Source API**: Write to SFTP using Databricks Python Data Source API with Paramiko 3.4.0
+- **Unity Catalog**: Manage SFTP connections and credentials securely
+- **Distributed Writes**: Each Spark executor handles its own partition writes
+- **Managed Volumes**: Checkpoint storage in Unity Catalog managed volumes
 - **Azure Integration**: Complete setup using Azure Storage with SFTP enabled
 
 ## Prerequisites
@@ -201,92 +209,41 @@ Run this notebook in your Databricks workspace to:
 
 **Notebook**: `notebooks/02_uc_connection_setup.ipynb`
 
-Run this notebook to configure Unity Catalog for SFTP access:
+Run this notebook to configure Unity Catalog SFTP connections:
 
-1. **Create catalog and schema:**
-   ```sql
-   CREATE CATALOG IF NOT EXISTS sftp_demo;
-   CREATE SCHEMA IF NOT EXISTS sftp_demo.connections;
-   ```
-
+1. **Load configuration** saved from notebook 01
 2. **Create Unity Catalog SFTP connections:**
-   - Source SFTP connection for reading data
-   - Target SFTP connection for writing data
-
-3. **Grant permissions** to users/groups who need access
-
-4. **Test AutoLoader** with SFTP to ensure data can be read
+   - Source SFTP connection for reading data (used by AutoLoader)
+   - Target SFTP connection for writing data (used by AutoLoader)
 
 **What you'll have after this step:**
 - Unity Catalog connections configured for source and target SFTP
-- Permissions set up for pipeline execution
-- Verified AutoLoader can read from SFTP
+- Connections ready for AutoLoader and structured streaming
 
-### Step 5: Create and Run DLT Pipeline
+### Step 5: Run SFTP Structured Streaming Demo (Databricks)
 
-**Notebook**: `notebooks/03_dlt_pipeline.ipynb`
+**Notebook**: `notebooks/03_sftp_structured_streaming.ipynb`
 
-1. **Create the DLT Pipeline:**
-   - In Databricks UI: Go to **Delta Live Tables** → **Create Pipeline**
-   - **Pipeline Name**: `sftp_ingestion_pipeline`
-   - **Notebook Path**: `/Workspace/Repos/<your-repo>/databricks-sftp-data-source/notebooks/03_dlt_pipeline.ipynb`
-   - **Target**: `sftp_demo.processed_data`
-   - **Configuration**: Use settings from `config/dlt_pipeline_config.json`
+Run this notebook to demonstrate end-to-end SFTP reading and writing:
 
-2. **Start the Pipeline:**
-   - Click **Start** in the DLT UI
-   - Monitor the pipeline execution
+1. **Read from Source SFTP:**
+   - Uses AutoLoader to read `customers.csv` from source SFTP
+   - Displays the data and schema
+   - Writes to Unity Catalog table
 
-3. **Pipeline stages:**
-   - **Bronze Layer**: Ingest raw CSV files from source SFTP via AutoLoader
-   - **Silver Layer**: Clean and validate data (email validation, data type checks)
-   - **Gold Layer**: Create aggregated business metrics (customer summaries, order analytics)
-   - **Export**: Write Gold layer tables back to target SFTP using custom data source
+2. **Write to Target SFTP:**
+   - Creates demo DataFrame
+   - Uses custom SFTP data source to write to target SFTP
+   - Each Spark executor writes its partition using Paramiko
+
+3. **Verify Results:**
+   - Lists files in target SFTP directory
+   - Confirms `demo_customers.csv` was written successfully
 
 **What you'll have after this step:**
-- Complete medallion architecture (Bronze → Silver → Gold)
-- Data quality expectations enforced
-- Processed data exported to target SFTP
-- Monitoring and lineage visualization in DLT UI
-
-### Step 6: Verify Results
-
-After the pipeline completes, verify the output:
-
-```python
-# Check files written to target SFTP
-from ingest import SFTPWriter
-import tempfile
-import os
-
-# Get SSH private key from secrets and write to temporary file
-ssh_key_content = dbutils.secrets.get("sftp-credentials", "ssh-private-key")
-with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='_sftp_key') as tmp_key:
-    tmp_key.write(ssh_key_content)
-    tmp_key_path = tmp_key.name
-
-# Set proper permissions on the key file
-os.chmod(tmp_key_path, 0o600)
-
-config = {
-    "host": dbutils.secrets.get("sftp-credentials", "target-host"),
-    "username": dbutils.secrets.get("sftp-credentials", "target-username"),
-    "private_key_path": tmp_key_path,
-    "port": 22
-}
-
-writer = SFTPWriter.create_writer(config)
-with writer.session():
-    files = writer.list_files("/data/output")
-    print(f"Files in target SFTP: {files}")
-
-# Clean up temporary key file
-os.remove(tmp_key_path)
-```
-
-**Expected output files:**
-- `customer_summary.csv` - Aggregated customer metrics
-- `order_analytics.csv` - Order statistics and trends
+- Complete demonstration of SFTP read/write operations
+- Data written to target SFTP server
+- Verification that the custom data source works correctly
 
 ### Option B: Production Setup with Existing SFTP Servers
 
@@ -337,25 +294,23 @@ Proceed directly to Step 3 (Install Package and Verify Setup) in the Databricks 
 
 ```
 databricks-sftp-data-source/
-├── src/                       # Source code
-│   └── ingest/               # Custom SFTP data source package
-│       ├── __init__.py
-│       └── SFTPWriter.py     # Paramiko-based SFTP writer
+├── CustomDataSource/          # Custom SFTP data source package
+│   ├── __init__.py
+│   └── SFTPDataSource.py     # Databricks Data Source API + Paramiko
 ├── scripts/                   # Local machine setup scripts
 │   ├── setup_azure_infrastructure.sh    # Azure resources setup
 │   └── setup_databricks_secrets.sh      # Databricks secrets configuration
 ├── notebooks/                 # Databricks notebooks (run in Databricks)
-│   ├── 01_infrastructure_setup.ipynb    # Package install & verification
-│   ├── 02_uc_connection_setup.ipynb     # Unity Catalog setup
-│   └── 03_dlt_pipeline.ipynb            # DLT pipeline
+│   ├── 01_infrastructure_setup.ipynb    # Infrastructure setup & verification
+│   ├── 02_uc_connection_setup.ipynb     # Unity Catalog connection setup
+│   └── 03_sftp_structured_streaming.ipynb  # SFTP read/write demo
 ├── data/                      # Sample CSV files
-│   ├── customers.csv
-│   └── orders.csv
+│   └── customers.csv          # Sample customer data
 ├── config/                    # Configuration files
-│   ├── .env.example                     # Environment variables template
-│   └── dlt_pipeline_config.json         # DLT pipeline configuration
-├── requirements.txt           # Python dependencies (pinned versions)
-├── setup.py                   # Package setup
+│   └── .env.example           # Environment variables template
+├── requirements.txt           # Python dependencies (Paramiko 3.4.0)
+├── setup.py                   # Package setup for editable install
+├── pyproject.toml             # Modern Python build configuration
 └── README.md
 ```
 
@@ -363,81 +318,71 @@ databricks-sftp-data-source/
 
 ### Custom SFTP Data Source API
 
+**Writing to SFTP with Databricks Data Source API:**
+
 ```python
-from ingest import SFTPDataSource, SFTPWriter
-import tempfile
-import os
+from CustomDataSource import SFTPDataSource
 
-# Get SSH private key from secrets and write to temporary file
+# Register the data source with Spark (once per session)
+spark.dataSource.register(SFTPDataSource)
+
+# Get SSH key from secrets
 ssh_key_content = dbutils.secrets.get("sftp-credentials", "ssh-private-key")
-with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='_sftp_key') as tmp_key:
-    tmp_key.write(ssh_key_content)
-    tmp_key_path = tmp_key.name
 
-# Set proper permissions
-os.chmod(tmp_key_path, 0o600)
+# Write DataFrame to SFTP using native Spark API
+df.write \
+    .format("sftp") \
+    .option("host", "sftp.example.com") \
+    .option("username", "user") \
+    .option("private_key_content", ssh_key_content) \
+    .option("port", "22") \
+    .option("path", "/remote/path/output.csv") \
+    .option("format", "csv") \
+    .option("header", "true") \
+    .mode("overwrite") \
+    .save()
+```
 
-# Configuration
-config = {
-    "host": dbutils.secrets.get("sftp-credentials", "target-host"),
-    "username": dbutils.secrets.get("sftp-credentials", "target-username"),
-    "private_key_path": tmp_key_path,
-    "port": 22
-}
+**Reading from SFTP with AutoLoader:**
 
-# Write DataFrame to SFTP
-SFTPDataSource.write(
-    df=my_dataframe,
-    remote_path="/data/output.csv",
-    config=config,
-    format="csv",
-    header=True
+```python
+# Read from SFTP using AutoLoader (Unity Catalog connection auto-matched by host)
+df = (
+    spark.readStream
+    .format("cloudFiles")
+    .option("cloudFiles.format", "csv")
+    .option("cloudFiles.schemaLocation", "/Volumes/catalog/schema/_checkpoints/schema")
+    .option("header", "true")
+    .load("sftp://user@sftp.example.com:22/data.csv")
 )
 
-# Using context manager
-writer = SFTPDataSource.create_writer(config)
-with writer.session():
-    writer.write_dataframe(df, "/data/output.csv", format="csv")
-    files = writer.list_files(".")
+# Write to table with checkpoint
+query = (
+    df.writeStream
+    .trigger(availableNow=True)
+    .option("checkpointLocation", "/Volumes/catalog/schema/_checkpoints/data")
+    .toTable("catalog.schema.table")
+)
 
-# Clean up temporary key file
-os.remove(tmp_key_path)
+query.awaitTermination()
 ```
 
-### DLT Pipeline
+**Connection Testing (Non-Distributed):**
 
-The DLT pipeline implements a medallion architecture:
-
-**Bronze Layer**: Raw data ingestion from source SFTP
 ```python
-@dlt.table(name="bronze_customers")
-def bronze_customers():
-    return (
-        spark.readStream
-        .format("cloudFiles")
-        .option("cloudFiles.format", "csv")
-        .option("cloudFiles.connectionName", "sftp_demo.source_sftp_connection")
-        .load("sftp://host/customers.csv")
-    )
-```
+from CustomDataSource import SFTPConnectionTester
 
-**Silver Layer**: Data cleaning and validation
-```python
-@dlt.table(name="silver_customers")
-@dlt.expect_or_drop("valid_email", "email LIKE '%@%'")
-def silver_customers():
-    return dlt.read_stream("bronze_customers").select(...)
-```
+# For testing connections on driver only (not for Spark distributed operations)
+tester = SFTPConnectionTester(
+    host="sftp.example.com",
+    username="user",
+    private_key_path="/path/to/key",
+    port=22
+)
 
-**Gold Layer**: Business metrics and aggregations
-```python
-@dlt.table(name="gold_customer_summary")
-def gold_customer_summary():
-    return (
-        dlt.read_stream("silver_customers")
-        .groupBy("customer_id")
-        .agg(...)
-    )
+with tester as conn:
+    files = conn.list_files(".")
+    print(f"Files: {files}")
 ```
 
 ## Data Flow Example
@@ -451,51 +396,50 @@ customer_id,name,email,country,signup_date
 2,Emma Johnson,emma.j@example.com,UK,2024-02-20
 ```
 
-**orders.csv**
-```csv
-order_id,customer_id,product,quantity,amount,order_date
-1001,1,Laptop,1,999.99,2024-01-20
-1002,2,Mouse,2,25.50,2024-02-22
-```
-
 ### Output Data (Target SFTP)
 
-**customer_summary.csv**
+**demo_customers.csv** (written by custom data source)
 ```csv
-customer_id,name,email,country,total_orders,total_amount,avg_order_amount
-1,John Smith,john.smith@example.com,USA,2,1399.97,699.985
-2,Emma Johnson,emma.j@example.com,UK,1,25.50,25.50
+customer_id,name,email,country,signup_date
+1,Demo Customer 1,demo1@example.com,USA,2025-12-09
+2,Demo Customer 2,demo2@example.com,UK,2025-12-09
+3,Demo Customer 3,demo3@example.com,Canada,2025-12-09
 ```
 
 ## API Reference
 
+### SFTPDataSource
+
+Databricks Python Data Source API implementation for SFTP writes.
+
+**Class Methods:**
+- `name()` - Returns "sftp" (format name for Spark)
+- `writer(schema, overwrite)` - Creates SFTPWriter instance for distributed writes
+
+**Usage:**
+```python
+spark.dataSource.register(SFTPDataSource)
+df.write.format("sftp").option(...).save()
+```
+
 ### SFTPWriter
 
-Main class for SFTP operations.
+DataSourceWriter implementation that handles partition writes.
+
+**Methods:**
+- `write(iterator)` - Write partition data to SFTP (called by Spark executors)
+- `commit(messages)` - Called when all partition writes succeed
+- `abort(messages)` - Called when partition writes fail
+
+### SFTPConnectionTester
+
+Utility class for testing SFTP connections (non-distributed).
 
 **Methods:**
 - `connect()` - Establish SFTP connection
 - `disconnect()` - Close SFTP connection
-- `session()` - Context manager for automatic connection handling
-- `write_dataframe(df, remote_path, format, **kwargs)` - Write DataFrame to SFTP
-- `write_file(local_path, remote_path)` - Upload file to SFTP
 - `list_files(remote_dir)` - List files in remote directory
-
-### SFTPDataSource
-
-Factory class for creating SFTP writers.
-
-**Methods:**
-- `create_writer(config)` - Create SFTPWriter from configuration
-- `write(df, remote_path, config, **kwargs)` - Convenience method to write DataFrame
-
-## Monitoring
-
-Monitor your DLT pipeline:
-- **Data Quality**: View expectation metrics in DLT UI
-- **Data Lineage**: Track data flow through bronze → silver → gold
-- **Performance**: Check processing times and record counts
-- **Errors**: Review failed records and validation issues
+- `__enter__/__exit__` - Context manager support
 
 ## Troubleshooting
 
@@ -503,30 +447,43 @@ Monitor your DLT pipeline:
 
 **Problem**: Cannot connect to SFTP
 ```
-Solution: Verify SSH key permissions and host configuration
-- Check SSH key: ls -la ~/.ssh/sftp_key
-- Test connection: sftp -i ~/.ssh/sftp_key user@host
+Solution: Verify SSH key and credentials
+- Check SSH key in secrets: databricks secrets list-secrets sftp-credentials
+- Test connection from local machine: sftp -i ~/.ssh/sftp_key user@host
+- Verify ECDSA fingerprint: ssh-keyscan -t ecdsa host | ssh-keygen -lf -
 ```
 
 ### AutoLoader Issues
 
-**Problem**: AutoLoader not detecting files
+**Problem**: AutoLoader not detecting files or connection errors
 ```
-Solution: Verify Unity Catalog connection
-- Check connection: SHOW CONNECTIONS IN sftp_demo
-- Test manually: spark.read.format("csv").load("sftp://...")
+Solution: Verify Unity Catalog SFTP connection
+- List connections: SHOW CONNECTIONS IN catalog_name
+- Check connection config: DESCRIBE CONNECTION connection_name
+- Verify host in SFTP URI matches connection host (auto-matching)
 ```
 
-### Permission Issues
+### Custom Data Source Write Issues
 
-**Problem**: Access denied to Unity Catalog connection
+**Problem**: ModuleNotFoundError when writing to SFTP
 ```
-Solution: Grant appropriate permissions
-GRANT USAGE ON CONNECTION sftp_demo.source_sftp_connection TO `user@example.com`
+Solution: Ensure package is installed with pip install -e
+- Run: %pip install -e .. (from notebooks directory)
+- Restart Python: dbutils.library.restartPython()
+- Verify import works: from CustomDataSource import SFTPDataSource
+```
+
+**Problem**: SSH key file not found on executors
+```
+Solution: Use private_key_content option instead of private_key_path
+- Pass key content as string: .option("private_key_content", ssh_key_content)
+- Each executor creates its own temp file from the content
+- Avoids file path issues in distributed environments
 ```
 
 ## Acknowledgments
 
-- Built with [Paramiko](https://www.paramiko.org/) for SFTP operations
-- Uses [Databricks AutoLoader](https://docs.databricks.com/ingestion/auto-loader/index.html) for incremental ingestion
-- Implements [Delta Live Tables](https://docs.databricks.com/delta-live-tables/index.html) for data pipelines
+- Built with [Paramiko 3.4.0](https://www.paramiko.org/) for SFTP operations
+- Uses [Databricks Python Data Source API](https://www.databricks.com/blog/announcing-general-availability-python-data-source-api) for custom data source integration
+- Leverages [Databricks AutoLoader](https://docs.databricks.com/ingestion/auto-loader/index.html) for incremental SFTP ingestion
+- Unity Catalog for secure credential and connection management
