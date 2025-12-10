@@ -1,3 +1,0 @@
-"""
-Databricks SFTP Data Source
-"""

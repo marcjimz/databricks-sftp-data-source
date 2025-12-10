@@ -25,7 +25,8 @@ class SFTPWriter(DataSourceWriter):
     Options:
         host: SFTP server hostname
         username: SFTP username
-        private_key_path: Path to SSH private key file
+        private_key_content: SSH private key content (recommended for distributed writes)
+        private_key_path: Path to SSH private key file (alternative to private_key_content)
         password: Password for authentication (alternative to private_key)
         port: SFTP port (default: 22)
         path: Remote path to write to
@@ -37,6 +38,7 @@ class SFTPWriter(DataSourceWriter):
         self.options = options
         self.host = options.get("host")
         self.username = options.get("username")
+        self.private_key_content = options.get("private_key_content")
         self.private_key_path = options.get("private_key_path")
         self.password = options.get("password")
         self.port = int(options.get("port", "22"))
@@ -48,7 +50,8 @@ class SFTPWriter(DataSourceWriter):
         assert self.host is not None, "Option 'host' is required"
         assert self.username is not None, "Option 'username' is required"
         assert self.path is not None, "Option 'path' is required"
-        assert self.private_key_path or self.password, "Either 'private_key_path' or 'password' is required"
+        assert self.private_key_content or self.private_key_path or self.password, \
+            "Either 'private_key_content', 'private_key_path', or 'password' is required"
 
     def write(self, iterator: Iterator) -> SFTPCommitMessage:
         """
@@ -104,6 +107,8 @@ class SFTPWriter(DataSourceWriter):
         # Create SFTP connection and write
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        sftp = None
+        temp_key_file = None
 
         try:
             # Connect with private key or password
@@ -114,7 +119,17 @@ class SFTPWriter(DataSourceWriter):
                 "timeout": 30
             }
 
-            if self.private_key_path:
+            if self.private_key_content:
+                # Create temporary key file on executor
+                import tempfile
+                temp_key_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='_sftp_key')
+                temp_key_file.write(self.private_key_content)
+                temp_key_file.close()
+                os.chmod(temp_key_file.name, 0o600)
+
+                private_key = paramiko.RSAKey.from_private_key_file(temp_key_file.name)
+                auth_kwargs["pkey"] = private_key
+            elif self.private_key_path:
                 private_key = paramiko.RSAKey.from_private_key_file(self.private_key_path)
                 auth_kwargs["pkey"] = private_key
             else:
@@ -145,6 +160,10 @@ class SFTPWriter(DataSourceWriter):
             sftp.close()
             client.close()
 
+            # Clean up temporary key file if created
+            if temp_key_file and os.path.exists(temp_key_file.name):
+                os.remove(temp_key_file.name)
+
             return SFTPCommitMessage(
                 partition_id=partition_id,
                 row_count=row_count,
@@ -152,10 +171,25 @@ class SFTPWriter(DataSourceWriter):
             )
 
         except Exception as e:
-            if sftp:
-                sftp.close()
-            if client:
-                client.close()
+            # Clean up connections on error
+            try:
+                if sftp:
+                    sftp.close()
+            except:
+                pass
+            try:
+                if client:
+                    client.close()
+            except:
+                pass
+
+            # Clean up temporary key file if created
+            try:
+                if temp_key_file and os.path.exists(temp_key_file.name):
+                    os.remove(temp_key_file.name)
+            except:
+                pass
+
             raise RuntimeError(f"Failed to write partition {partition_id} to SFTP: {e}")
 
     def commit(self, messages: List[SFTPCommitMessage]) -> None:
@@ -210,9 +244,95 @@ class SFTPWriter(DataSourceWriter):
                 sftp.mkdir(dir_path)
 
 
+class SFTPConnectionTester:
+    """
+    Utility class for testing SFTP connections.
+
+    This is separate from the Spark DataSource API and used for connection verification.
+    """
+
+    def __init__(self, host: str, username: str, private_key_path: str = None,
+                 password: str = None, port: int = 22):
+        """
+        Initialize SFTP connection tester.
+
+        Args:
+            host: SFTP server hostname
+            username: SFTP username
+            private_key_path: Path to SSH private key file
+            password: Password for authentication (alternative to private_key)
+            port: SFTP port (default: 22)
+        """
+        self.host = host
+        self.username = username
+        self.private_key_path = private_key_path
+        self.password = password
+        self.port = port
+        self._client = None
+        self._sftp = None
+
+    def connect(self):
+        """Establish SFTP connection"""
+        import paramiko
+
+        self._client = paramiko.SSHClient()
+        self._client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        auth_kwargs = {
+            "hostname": self.host,
+            "port": self.port,
+            "username": self.username,
+            "timeout": 30
+        }
+
+        if self.private_key_path:
+            private_key = paramiko.RSAKey.from_private_key_file(self.private_key_path)
+            auth_kwargs["pkey"] = private_key
+        elif self.password:
+            auth_kwargs["password"] = self.password
+        else:
+            raise ValueError("Either private_key_path or password must be provided")
+
+        self._client.connect(**auth_kwargs)
+        self._sftp = self._client.open_sftp()
+        return self
+
+    def disconnect(self):
+        """Close SFTP connection"""
+        if self._sftp:
+            self._sftp.close()
+        if self._client:
+            self._client.close()
+
+    def __enter__(self):
+        """Context manager entry"""
+        return self.connect()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit"""
+        self.disconnect()
+
+    def list_files(self, remote_dir: str = "."):
+        """
+        List files in remote directory.
+
+        Args:
+            remote_dir: Remote directory path
+
+        Returns:
+            List of file names
+        """
+        if not self._sftp:
+            raise RuntimeError("Not connected. Call connect() first or use context manager.")
+        return self._sftp.listdir(remote_dir)
+
+
 class SFTPDataSource(DataSource):
     """
     SFTP Data Source for Databricks
+
+    This class implements the Databricks Python Data Source API for SFTP writes.
+    For connection testing, use SFTPConnectionTester instead.
 
     Example usage:
         # Register the data source
